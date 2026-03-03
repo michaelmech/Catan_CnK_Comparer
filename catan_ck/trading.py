@@ -38,28 +38,32 @@ def _pick_trade_source(hand: Counter, trade_rate: int, cost: Cost, target_card: 
     return best_src
 
 
-def ensure_can_pay_with_trades(hand: Counter, cost: Cost, trade_rate: int) -> bool:
+def ensure_can_pay_with_trades(hand: Counter, cost: Cost, trade_rate: int) -> Tuple[bool, int]:
+    trades_made = 0
     if can_pay(hand, cost):
-        return True
+        return True, trades_made
 
     for card, need in cost.items():
         while hand.get(card, 0) < need:
             src = _pick_trade_source(hand, trade_rate, cost, target_card=card)
             if src is None:
-                return False
+                return False, trades_made
             hand[src] -= trade_rate
             if hand[src] <= 0:
                 del hand[src]
             hand[card] += 1
+            trades_made += 1
 
-    return can_pay(hand, cost)
+    return can_pay(hand, cost), trades_made
 
 
-def discard_half(hand: Counter, mode: str, rng: random.Random) -> None:
+def discard_half(hand: Counter, mode: str, rng: random.Random) -> int:
     total = sum(hand.values())
     k = total // 2
     if k <= 0:
-        return
+        return 0
+
+    discarded = 0
 
     def weighted_pick(card_types: Tuple[str, ...]) -> Optional[str]:
         weights = [hand.get(c, 0) for c in card_types]
@@ -85,7 +89,8 @@ def discard_half(hand: Counter, mode: str, rng: random.Random) -> None:
             hand[card] -= 1
             if hand[card] <= 0:
                 del hand[card]
-        return
+            discarded += 1
+        return discarded
 
     for _ in range(k):
         card = weighted_pick(ALL_CARDS)
@@ -94,3 +99,6 @@ def discard_half(hand: Counter, mode: str, rng: random.Random) -> None:
         hand[card] -= 1
         if hand[card] <= 0:
             del hand[card]
+        discarded += 1
+
+    return discarded
