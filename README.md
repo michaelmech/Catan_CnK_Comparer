@@ -1,4 +1,27 @@
 # Catan_CnK_Comparer
-Initial prompt:
 
-I want some way to roughly figure out in catan cities knights which one is better between trading resources for resources to build units, or for the city upgrades. I want to code some way to possibly simulate this comparatively. Let's say we assumed an n:1 trading rate. We issued some constraints from the game like cities needing 2 wheat, 3 ore, and likewise for the corresonding resources for settlements (let's add the resources for a road in there as well since units need roads). We write some sort of code that simulates the resource distrbution of typical starting positions of players (no graphics, just pure probability representation , and let's allow me to change between 3-4 players). One one side, for each player's turn, the code forces them to try and get as many city developments using commodities as possible given both city commodity generation and the n:1 trading rate (it will prioritze developing the 2nd and nth developments, so they can't just unlock the first units of the other two using n:1 necessarily)  Once any of them (or all of them) reaches the nth city development, we track what turn number that occured. Using that turn number as an iteration limit, on the other side, for each player's turn, the code tries to force them to create as many settlements and cities as possible with the resources they have available (given the n:1 trade rate as well). For both, when a 7 is rolled, cards get discarded by half, rounding down. For the commodities, it will err towards throwing resources away, but if it has to burn commodities, it will randomize. For the unit building one, it will just throw resources randomly away. At the end, we will tally how many units get built given the stopping criterion from the commodity simulation. this should allow us to get a comparative value. Write me the code for this and canvas it. 
+Monte Carlo simulator for a simplified **Catan: Cities & Knights** comparison between:
+
+1. Development-track strategy (commodity-focused city improvements), and
+2. Unit/building strategy (cities + settlement/road bundles).
+
+## Project structure
+
+The original brainstorming notebook logic has been split into importable Python modules:
+
+- `catan_ck/constants.py` – game constants and costs
+- `catan_ck/board.py` – board/site abstractions and production logic
+- `catan_ck/trading.py` – payment, bank-trade, and discard helpers
+- `catan_ck/models.py` – dataclasses for player/trial state
+- `catan_ck/strategies.py` – per-turn strategy actions
+- `catan_ck/simulation.py` – simulation runners and experiment summary output
+- `catan_ck/cli.py` – argument parsing and CLI orchestration
+- `ck_catan_trade_sim.py` – top-level executable entrypoint
+
+## Run
+
+```bash
+python ck_catan_trade_sim.py --players 4 --trade-rate 4 --target-level 4 --trials 5000
+```
+
+The notebook (`Catan_CnK_Comparer.ipynb`) is still present for reference, while the runnable logic now lives in `.py` modules.
