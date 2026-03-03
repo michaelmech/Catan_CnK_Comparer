@@ -43,6 +43,7 @@ def simulate_development_until_target(
     typical_samples: int,
     starting_hand: str,
     dice_seq: List[int],
+    random_seven_discards: bool,
 ) -> Tuple[int, bool, List[str]]:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
     primaries = [choose_primary_track_by_commodity_expectation(p) for p in players]
@@ -50,8 +51,10 @@ def simulate_development_until_target(
     for turn in range(1, max_turns + 1):
         roll = dice_seq[turn - 1]
         if roll == 7:
+            discard_mode = "random" if random_seven_discards else "bias_resources"
             for player in players:
-                discard_half(player.hand, mode="bias_resources", rng=rng)
+                if sum(player.hand.values()) > 7:
+                    discard_half(player.hand, mode=discard_mode, rng=rng)
         else:
             for player in players:
                 player.collect(roll)
@@ -73,14 +76,17 @@ def simulate_units_for_turns(
     typical_samples: int,
     starting_hand: str,
     dice_seq: List[int],
+    random_seven_discards: bool,
 ) -> TrialResult:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
 
     for turn in range(1, turns + 1):
         roll = dice_seq[turn - 1]
         if roll == 7:
+            discard_mode = "random" if random_seven_discards else "bias_resources"
             for player in players:
-                discard_half(player.hand, mode="random", rng=rng)
+                if sum(player.hand.values()) > 7:
+                    discard_half(player.hand, mode=discard_mode, rng=rng)
         else:
             for player in players:
                 player.collect(roll)
@@ -109,6 +115,7 @@ def run_experiment(
     typical_samples: int,
     starting_hand: str,
     seed: Optional[int] = None,
+    random_seven_discards: bool = True,
 ) -> None:
     rng = random.Random(seed)
 
@@ -128,6 +135,7 @@ def run_experiment(
             typical_samples=typical_samples,
             starting_hand=starting_hand,
             dice_seq=dice_seq,
+            random_seven_discards=random_seven_discards,
         )
 
         unit_res = simulate_units_for_turns(
@@ -138,6 +146,7 @@ def run_experiment(
             typical_samples=typical_samples,
             starting_hand=starting_hand,
             dice_seq=dice_seq,
+            random_seven_discards=random_seven_discards,
         )
 
         stop_turns.append(stop_turn)
@@ -167,6 +176,7 @@ def run_experiment(
     print("\n=== Cities & Knights rough trade sim ===")
     print(f"players={players}  trade_rate={trade_rate}:1  target_level={target_level}  trials={trials}")
     print(f"starting_hand={starting_hand}  typical_samples={typical_samples}  max_turns={max_turns}")
+    print(f"random_seven_discards={random_seven_discards}")
     if seed is not None:
         print(f"seed={seed}")
 

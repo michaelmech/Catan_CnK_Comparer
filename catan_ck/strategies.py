@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 
 from .board import pip_value, random_site
-from .constants import CITY_COST, SETTLEMENT_PLUS_ROAD_COST, TERRAIN_TO_COMMODITY, TRACK_TO_COMMODITY
+from .constants import CITY_COST, KNIGHT_COST, SETTLEMENT_PLUS_ROAD_COST, TERRAIN_TO_COMMODITY, TRACK_TO_COMMODITY
 from .models import PlayerState
 from .trading import ensure_can_pay_with_trades, pay
 
@@ -24,7 +24,24 @@ def choose_primary_track_by_commodity_expectation(player: PlayerState) -> str:
     return commodity_to_track[best_comm]
 
 
+def _build_required_knight(player: PlayerState, trade_rate: int) -> bool:
+    if player.has_knight:
+        return True
+
+    hand_copy = player.hand.copy()
+    if not ensure_can_pay_with_trades(hand_copy, KNIGHT_COST, trade_rate):
+        return False
+
+    player.hand = hand_copy
+    pay(player.hand, KNIGHT_COST)
+    player.has_knight = True
+    return True
+
+
 def dev_turn_action(player: PlayerState, trade_rate: int, primary_track: str, target_level: int) -> None:
+    if not _build_required_knight(player, trade_rate):
+        return
+
     commodity = TRACK_TO_COMMODITY[primary_track]
 
     while player.dev_levels[primary_track] < target_level:
@@ -41,6 +58,9 @@ def dev_turn_action(player: PlayerState, trade_rate: int, primary_track: str, ta
 
 
 def unit_turn_action(player: PlayerState, trade_rate: int, rng: random.Random, typical_samples: int) -> None:
+    if not _build_required_knight(player, trade_rate):
+        return
+
     while True:
         built_any = False
 

@@ -15,6 +15,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--typical-samples", type=int, default=50, dest="typical_samples")
     parser.add_argument("--starting-hand", type=str, default="ck_city", choices=("ck_city", "none"))
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--random-seven-discards", dest="random_seven_discards", action="store_true")
+    parser.add_argument("--no-random-seven-discards", dest="random_seven_discards", action="store_false")
+    parser.set_defaults(random_seven_discards=True)
     args, _unknown = parser.parse_known_args()
     return args
 
@@ -35,4 +38,5 @@ def main() -> None:
         typical_samples=args.typical_samples,
         starting_hand=args.starting_hand,
         seed=args.seed,
+        random_seven_discards=args.random_seven_discards,
     )

@@ -16,6 +16,7 @@ class PlayerState:
     settlements_built: int = 0
     cities_built: int = 0
     roads_built: int = 0
+    has_knight: bool = False
 
     def collect(self, roll: int) -> None:
         for s in self.sites:
