@@ -65,27 +65,37 @@ def unit_turn_action(player: PlayerState, trade_rate: int, rng: random.Random, t
         built_any = False
 
         settlement_idxs = player.non_city_settlement_indices()
-        if settlement_idxs:
-            hand_copy = player.hand.copy()
-            if ensure_can_pay_with_trades(hand_copy, CITY_COST, trade_rate):
+        city_gap = sum(max(0, n - player.hand.get(c, 0)) for c, n in CITY_COST.items())
+        settlement_gap = sum(max(0, n - player.hand.get(c, 0)) for c, n in SETTLEMENT_PLUS_ROAD_COST.items())
+
+        preferred = "settlement" if settlement_gap < city_gap else "city"
+        build_order = (preferred, "city" if preferred == "settlement" else "settlement")
+
+        for build_kind in build_order:
+            if build_kind == "city":
+                if not settlement_idxs:
+                    continue
+                hand_copy = player.hand.copy()
+                if not ensure_can_pay_with_trades(hand_copy, CITY_COST, trade_rate):
+                    continue
                 player.hand = hand_copy
                 pay(player.hand, CITY_COST)
                 idx = settlement_idxs[0]
                 player.sites[idx].is_city = True
                 player.cities_built += 1
                 built_any = True
+                break
 
-        if built_any:
-            continue
-
-        hand_copy = player.hand.copy()
-        if ensure_can_pay_with_trades(hand_copy, SETTLEMENT_PLUS_ROAD_COST, trade_rate):
+            hand_copy = player.hand.copy()
+            if not ensure_can_pay_with_trades(hand_copy, SETTLEMENT_PLUS_ROAD_COST, trade_rate):
+                continue
             player.hand = hand_copy
             pay(player.hand, SETTLEMENT_PLUS_ROAD_COST)
             player.sites.append(random_site(rng, is_city=False, typical_samples=typical_samples))
             player.settlements_built += 1
             player.roads_built += 1
             built_any = True
+            break
 
         if not built_any:
             break
