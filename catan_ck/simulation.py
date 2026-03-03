@@ -53,6 +53,27 @@ def _metrics_from_players(players: List[PlayerState]) -> Dict[str, object]:
     }
 
 
+def _resolve_barbarian_attack(players: List[PlayerState]) -> None:
+    for player in players:
+        defended = False
+        if player.has_knight:
+            if player.knight_active:
+                defended = True
+            elif player.hand.get("grain", 0) >= 1:
+                player.hand["grain"] -= 1
+                if player.hand["grain"] <= 0:
+                    del player.hand["grain"]
+                player.knight_active = True
+                defended = True
+
+        if not defended:
+            player.lose_one_city()
+
+    for player in players:
+        if player.has_knight:
+            player.knight_active = False
+
+
 def simulate_development_until_target(
     rng: random.Random,
     num_players: int,
@@ -63,9 +84,11 @@ def simulate_development_until_target(
     starting_hand: str,
     dice_seq: List[int],
     random_seven_discards: bool,
+    barbarian_enabled: bool,
 ) -> Tuple[int, bool, List[str], Dict[str, object]]:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
     primaries = [choose_primary_track_by_commodity_expectation(p) for p in players]
+    barbarian_progress = 0
 
     for turn in range(1, max_turns + 1):
         roll = dice_seq[turn - 1]
@@ -77,6 +100,12 @@ def simulate_development_until_target(
         else:
             for player in players:
                 player.collect(roll)
+
+        if barbarian_enabled:
+            barbarian_progress += 1
+            if barbarian_progress >= 7:
+                _resolve_barbarian_attack(players)
+                barbarian_progress = 0
 
         active = (turn - 1) % num_players
         dev_turn_action(players[active], trade_rate, primaries[active], target_level)
@@ -96,8 +125,11 @@ def simulate_units_for_turns(
     starting_hand: str,
     dice_seq: List[int],
     random_seven_discards: bool,
+    barbarian_enabled: bool,
 ) -> TrialResult:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
+
+    barbarian_progress = 0
 
     for turn in range(1, turns + 1):
         roll = dice_seq[turn - 1]
@@ -109,6 +141,12 @@ def simulate_units_for_turns(
         else:
             for player in players:
                 player.collect(roll)
+
+        if barbarian_enabled:
+            barbarian_progress += 1
+            if barbarian_progress >= 7:
+                _resolve_barbarian_attack(players)
+                barbarian_progress = 0
 
         active = (turn - 1) % num_players
         unit_turn_action(players[active], trade_rate=trade_rate, rng=rng, typical_samples=typical_samples)
@@ -141,6 +179,7 @@ def run_experiment(
     starting_hand: str,
     seed: Optional[int] = None,
     random_seven_discards: bool = True,
+    barbarian_enabled: bool = False,
 ) -> None:
     rng = random.Random(seed)
 
@@ -178,6 +217,7 @@ def run_experiment(
             starting_hand=starting_hand,
             dice_seq=dice_seq,
             random_seven_discards=random_seven_discards,
+            barbarian_enabled=barbarian_enabled,
         )
 
         unit_res = simulate_units_for_turns(
@@ -189,6 +229,7 @@ def run_experiment(
             starting_hand=starting_hand,
             dice_seq=dice_seq,
             random_seven_discards=random_seven_discards,
+            barbarian_enabled=barbarian_enabled,
         )
 
         roll_counts.update(dice_seq[:stop_turn])
@@ -240,6 +281,7 @@ def run_experiment(
     print(f"players={players}  trade_rate={trade_rate}:1  target_level={target_level}  trials={trials}")
     print(f"starting_hand={starting_hand}  typical_samples={typical_samples}  max_turns={max_turns}")
     print(f"random_seven_discards={random_seven_discards}")
+    print(f"barbarian_enabled={barbarian_enabled}")
     if seed is not None:
         print(f"seed={seed}")
 

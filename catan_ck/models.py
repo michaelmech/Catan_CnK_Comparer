@@ -17,6 +17,7 @@ class PlayerState:
     cities_built: int = 0
     roads_built: int = 0
     has_knight: bool = False
+    knight_active: bool = False
     bank_trades_made: int = 0
     resources_gained_total: int = 0
     resources_gained_by_type: Dict[str, int] = field(default_factory=lambda: {r: 0 for r in RESOURCES})
@@ -35,6 +36,13 @@ class PlayerState:
 
     def non_city_settlement_indices(self) -> List[int]:
         return [i for i, s in enumerate(self.sites) if not s.is_city]
+
+    def lose_one_city(self) -> bool:
+        for site in self.sites:
+            if site.is_city:
+                site.is_city = False
+                return True
+        return False
 
 
 @dataclass

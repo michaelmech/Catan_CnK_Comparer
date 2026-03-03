@@ -37,6 +37,7 @@ def _build_required_knight(player: PlayerState, trade_rate: int) -> bool:
     player.hand = hand_copy
     pay(player.hand, KNIGHT_COST)
     player.has_knight = True
+    player.knight_active = False
     return True
 
 
