@@ -29,9 +29,11 @@ def _build_required_knight(player: PlayerState, trade_rate: int) -> bool:
         return True
 
     hand_copy = player.hand.copy()
-    if not ensure_can_pay_with_trades(hand_copy, KNIGHT_COST, trade_rate):
+    can_pay, trades_used = ensure_can_pay_with_trades(hand_copy, KNIGHT_COST, trade_rate)
+    if not can_pay:
         return False
 
+    player.bank_trades_made += trades_used
     player.hand = hand_copy
     pay(player.hand, KNIGHT_COST)
     player.has_knight = True
@@ -49,9 +51,11 @@ def dev_turn_action(player: PlayerState, trade_rate: int, primary_track: str, ta
         cost = {commodity: next_level}
 
         hand_copy = player.hand.copy()
-        if not ensure_can_pay_with_trades(hand_copy, cost, trade_rate):
+        can_pay, trades_used = ensure_can_pay_with_trades(hand_copy, cost, trade_rate)
+        if not can_pay:
             break
 
+        player.bank_trades_made += trades_used
         player.hand = hand_copy
         pay(player.hand, cost)
         player.dev_levels[primary_track] = next_level
@@ -76,8 +80,10 @@ def unit_turn_action(player: PlayerState, trade_rate: int, rng: random.Random, t
                 if not settlement_idxs:
                     continue
                 hand_copy = player.hand.copy()
-                if not ensure_can_pay_with_trades(hand_copy, CITY_COST, trade_rate):
+                can_pay, trades_used = ensure_can_pay_with_trades(hand_copy, CITY_COST, trade_rate)
+                if not can_pay:
                     continue
+                player.bank_trades_made += trades_used
                 player.hand = hand_copy
                 pay(player.hand, CITY_COST)
                 idx = settlement_idxs[0]
@@ -87,8 +93,10 @@ def unit_turn_action(player: PlayerState, trade_rate: int, rng: random.Random, t
                 break
 
             hand_copy = player.hand.copy()
-            if not ensure_can_pay_with_trades(hand_copy, SETTLEMENT_PLUS_ROAD_COST, trade_rate):
+            can_pay, trades_used = ensure_can_pay_with_trades(hand_copy, SETTLEMENT_PLUS_ROAD_COST, trade_rate)
+            if not can_pay:
                 continue
+            player.bank_trades_made += trades_used
             player.hand = hand_copy
             pay(player.hand, SETTLEMENT_PLUS_ROAD_COST)
             player.sites.append(random_site(rng, is_city=False, typical_samples=typical_samples))

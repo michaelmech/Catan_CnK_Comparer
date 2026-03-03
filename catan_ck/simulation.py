@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import random
 import statistics
-from typing import List, Optional, Tuple
+from collections import Counter
+from typing import Dict, List, Optional, Tuple
 
 from .board import random_site
-from .constants import DICE_BAG
+from .constants import DICE_BAG, RESOURCES
 from .models import PlayerState, TrialResult
 from .strategies import (
     choose_primary_track_by_commodity_expectation,
@@ -34,6 +35,24 @@ def _make_players(
     return players
 
 
+def _metrics_from_players(players: List[PlayerState]) -> Dict[str, object]:
+    resource_totals = {r: 0 for r in RESOURCES}
+    for player in players:
+        for resource in RESOURCES:
+            resource_totals[resource] += player.resources_gained_by_type.get(resource, 0)
+
+    return {
+        "bank_trades_made": sum(player.bank_trades_made for player in players),
+        "resources_gained_total": sum(player.resources_gained_total for player in players),
+        "resources_gained_by_type": resource_totals,
+        "commodities_gained_from_hexes": sum(player.commodities_gained_from_hexes for player in players),
+        "cards_lost_to_sevens": sum(player.cards_lost_to_sevens for player in players),
+        "cities_built": sum(player.cities_built for player in players),
+        "settlements_built": sum(player.settlements_built for player in players),
+        "roads_built": sum(player.roads_built for player in players),
+    }
+
+
 def simulate_development_until_target(
     rng: random.Random,
     num_players: int,
@@ -44,7 +63,7 @@ def simulate_development_until_target(
     starting_hand: str,
     dice_seq: List[int],
     random_seven_discards: bool,
-) -> Tuple[int, bool, List[str]]:
+) -> Tuple[int, bool, List[str], Dict[str, object]]:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
     primaries = [choose_primary_track_by_commodity_expectation(p) for p in players]
 
@@ -54,7 +73,7 @@ def simulate_development_until_target(
             discard_mode = "random" if random_seven_discards else "bias_resources"
             for player in players:
                 if sum(player.hand.values()) > 7:
-                    discard_half(player.hand, mode=discard_mode, rng=rng)
+                    player.cards_lost_to_sevens += discard_half(player.hand, mode=discard_mode, rng=rng)
         else:
             for player in players:
                 player.collect(roll)
@@ -63,9 +82,9 @@ def simulate_development_until_target(
         dev_turn_action(players[active], trade_rate, primaries[active], target_level)
 
         if any(player.dev_levels[primaries[i]] >= target_level for i, player in enumerate(players)):
-            return turn, True, primaries
+            return turn, True, primaries, _metrics_from_players(players)
 
-    return max_turns, False, primaries
+    return max_turns, False, primaries, _metrics_from_players(players)
 
 
 def simulate_units_for_turns(
@@ -86,7 +105,7 @@ def simulate_units_for_turns(
             discard_mode = "random" if random_seven_discards else "bias_resources"
             for player in players:
                 if sum(player.hand.values()) > 7:
-                    discard_half(player.hand, mode=discard_mode, rng=rng)
+                    player.cards_lost_to_sevens += discard_half(player.hand, mode=discard_mode, rng=rng)
         else:
             for player in players:
                 player.collect(roll)
@@ -95,6 +114,7 @@ def simulate_units_for_turns(
         unit_turn_action(players[active], trade_rate=trade_rate, rng=rng, typical_samples=typical_samples)
 
     units_by_player = [p.settlements_built + p.cities_built for p in players]
+    metrics = _metrics_from_players(players)
     return TrialResult(
         stop_turn=turns,
         reached=True,
@@ -103,6 +123,11 @@ def simulate_units_for_turns(
         cities_by_player=[p.cities_built for p in players],
         settlements_by_player=[p.settlements_built for p in players],
         roads_by_player=[p.roads_built for p in players],
+        bank_trades_made=metrics["bank_trades_made"],
+        resources_gained_total=metrics["resources_gained_total"],
+        resources_gained_by_type=metrics["resources_gained_by_type"],
+        commodities_gained_from_hexes=metrics["commodities_gained_from_hexes"],
+        cards_lost_to_sevens=metrics["cards_lost_to_sevens"],
     )
 
 
@@ -122,11 +147,28 @@ def run_experiment(
     stop_turns: List[int] = []
     reached_flags: List[bool] = []
     units_totals: List[int] = []
+    dev_bank_trades: List[int] = []
+    unit_bank_trades: List[int] = []
+    dev_resources_total: List[int] = []
+    unit_resources_total: List[int] = []
+    dev_commodities_total: List[int] = []
+    unit_commodities_total: List[int] = []
+    dev_cards_lost_sevens: List[int] = []
+    unit_cards_lost_sevens: List[int] = []
+    dev_cities_built: List[int] = []
+    unit_cities_built: List[int] = []
+    dev_settlements_built: List[int] = []
+    unit_settlements_built: List[int] = []
+    dev_roads_built: List[int] = []
+    unit_roads_built: List[int] = []
+    dev_resource_by_type = {r: [] for r in RESOURCES}
+    unit_resource_by_type = {r: [] for r in RESOURCES}
+    roll_counts: Counter = Counter()
 
     for _ in range(trials):
         dice_seq = [rng.choice(DICE_BAG) for _ in range(max_turns)]
 
-        stop_turn, reached, _primaries = simulate_development_until_target(
+        stop_turn, reached, _primaries, dev_metrics = simulate_development_until_target(
             rng=rng,
             num_players=players,
             trade_rate=trade_rate,
@@ -149,9 +191,30 @@ def run_experiment(
             random_seven_discards=random_seven_discards,
         )
 
+        roll_counts.update(dice_seq[:stop_turn])
+
         stop_turns.append(stop_turn)
         reached_flags.append(reached)
         units_totals.append(unit_res.units_total)
+
+        dev_bank_trades.append(dev_metrics["bank_trades_made"])
+        unit_bank_trades.append(unit_res.bank_trades_made)
+        dev_resources_total.append(dev_metrics["resources_gained_total"])
+        unit_resources_total.append(unit_res.resources_gained_total)
+        dev_commodities_total.append(dev_metrics["commodities_gained_from_hexes"])
+        unit_commodities_total.append(unit_res.commodities_gained_from_hexes)
+        dev_cards_lost_sevens.append(dev_metrics["cards_lost_to_sevens"])
+        unit_cards_lost_sevens.append(unit_res.cards_lost_to_sevens)
+        dev_cities_built.append(dev_metrics["cities_built"])
+        unit_cities_built.append(sum(unit_res.cities_by_player))
+        dev_settlements_built.append(dev_metrics["settlements_built"])
+        unit_settlements_built.append(sum(unit_res.settlements_by_player))
+        dev_roads_built.append(dev_metrics["roads_built"])
+        unit_roads_built.append(sum(unit_res.roads_by_player))
+
+        for resource in RESOURCES:
+            dev_resource_by_type[resource].append(dev_metrics["resources_gained_by_type"][resource])
+            unit_resource_by_type[resource].append(unit_res.resources_gained_by_type[resource])
 
     reached_rate = sum(1 for x in reached_flags if x) / len(reached_flags)
 
@@ -187,3 +250,22 @@ def run_experiment(
 
     print("\n--- Unit/building side (units built by that time) ---")
     print(f"units_total: mean={mean_units:.2f}  median={med_units:.2f}")
+
+    print("\n--- Additional metrics (means across trials) ---")
+    print(f"bank_trades_made: dev={statistics.mean(dev_bank_trades):.2f}  unit={statistics.mean(unit_bank_trades):.2f}")
+    print(f"n_resources_gotten_total: dev={statistics.mean(dev_resources_total):.2f}  unit={statistics.mean(unit_resources_total):.2f}")
+    print(f"n_commodities_generated_from_hexes: dev={statistics.mean(dev_commodities_total):.2f}  unit={statistics.mean(unit_commodities_total):.2f}")
+    print(f"total_cards_lost_from_7s: dev={statistics.mean(dev_cards_lost_sevens):.2f}  unit={statistics.mean(unit_cards_lost_sevens):.2f}")
+    print(
+        "build_counts: "
+        f"dev(cities={statistics.mean(dev_cities_built):.2f}, settlements={statistics.mean(dev_settlements_built):.2f}, roads={statistics.mean(dev_roads_built):.2f})  "
+        f"unit(cities={statistics.mean(unit_cities_built):.2f}, settlements={statistics.mean(unit_settlements_built):.2f}, roads={statistics.mean(unit_roads_built):.2f})"
+    )
+
+    by_resource_dev = "  ".join(f"{r}={statistics.mean(dev_resource_by_type[r]):.2f}" for r in RESOURCES)
+    by_resource_unit = "  ".join(f"{r}={statistics.mean(unit_resource_by_type[r]):.2f}" for r in RESOURCES)
+    print(f"n_resources_by_type_dev: {by_resource_dev}")
+    print(f"n_resources_by_type_unit: {by_resource_unit}")
+
+    roll_line = "  ".join(f"{n}:{roll_counts.get(n, 0)}" for n in range(2, 13))
+    print(f"roll_counts: {roll_line}")
