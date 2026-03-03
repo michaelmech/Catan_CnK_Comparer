@@ -25,3 +25,9 @@ python ck_catan_trade_sim.py --players 4 --trade-rate 4 --target-level 4 --trial
 ```
 
 The notebook (`Catan_CnK_Comparer.ipynb`) is still present for reference, while the runnable logic now lives in `.py` modules.
+
+Rules currently modeled include:
+
+- Players must build an initial knight (grain + wool + ore) before doing any development upgrades or unit/building actions.
+- On a 7, only players with more than 7 total cards discard half their hand.
+- By default, 7-discard selection is fully random in both simulation tracks. You can disable this with `--no-random-seven-discards` to restore resource-biased discards.

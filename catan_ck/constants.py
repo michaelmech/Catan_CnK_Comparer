@@ -63,3 +63,5 @@ SETTLEMENT_PLUS_ROAD_COST = {
     "grain": SETTLEMENT_COST["grain"],
     "wool": SETTLEMENT_COST["wool"],
 }
+
+KNIGHT_COST = {"grain": 1, "ore": 1, "wool": 1}
