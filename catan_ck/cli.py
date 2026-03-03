@@ -17,7 +17,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--random-seven-discards", dest="random_seven_discards", action="store_true")
     parser.add_argument("--no-random-seven-discards", dest="random_seven_discards", action="store_false")
-    parser.set_defaults(random_seven_discards=True)
+    parser.add_argument("--barbarian", dest="barbarian_enabled", action="store_true")
+    parser.add_argument("--no-barbarian", dest="barbarian_enabled", action="store_false")
+    parser.set_defaults(random_seven_discards=True, barbarian_enabled=False)
     args, _unknown = parser.parse_known_args()
     return args
 
@@ -39,4 +41,5 @@ def main() -> None:
         starting_hand=args.starting_hand,
         seed=args.seed,
         random_seven_discards=args.random_seven_discards,
+        barbarian_enabled=args.barbarian_enabled,
     )
