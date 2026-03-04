@@ -136,6 +136,7 @@ def simulate_development_until_target(
     num_players: int,
     trade_rate: int,
     target_level: int,
+    target_players: int,
     max_turns: int,
     typical_samples: int,
     starting_hand: str,
@@ -177,7 +178,10 @@ def simulate_development_until_target(
             if aqueduct_enabled and players[active].dev_levels.get("science", 0) >= 3:
                 building_units[active] = True
 
-        if any(player.dev_levels[primaries[i]] >= target_level for i, player in enumerate(players)):
+        n_players_reached_target = sum(
+            1 for i, player in enumerate(players) if player.dev_levels[primaries[i]] >= target_level
+        )
+        if n_players_reached_target >= target_players:
             reached_target = True
             if not aqueduct_enabled and victory_points_target is None:
                 return turn, True, primaries, _metrics_from_players(players)
@@ -265,6 +269,7 @@ def run_experiment(
     players: int,
     trade_rate: int,
     target_level: int,
+    target_players: int,
     max_turns: int,
     typical_samples: int,
     starting_hand: str,
@@ -307,6 +312,7 @@ def run_experiment(
             num_players=players,
             trade_rate=trade_rate,
             target_level=target_level,
+            target_players=target_players,
             max_turns=max_turns,
             typical_samples=typical_samples,
             starting_hand=starting_hand,
@@ -378,7 +384,10 @@ def run_experiment(
     med_units = statistics.median(units_totals)
 
     print("\n=== Cities & Knights rough trade sim ===")
-    print(f"players={players}  trade_rate={trade_rate}:1  target_level={target_level}  trials={trials}")
+    print(
+        f"players={players}  trade_rate={trade_rate}:1  target_level={target_level}  "
+        f"target_players={target_players}  trials={trials}"
+    )
     print(f"starting_hand={starting_hand}  typical_samples={typical_samples}  max_turns={max_turns}")
     print(f"random_seven_discards={random_seven_discards}")
     print(f"barbarian_enabled={barbarian_enabled}")

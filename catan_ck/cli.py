@@ -10,6 +10,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--players", type=int, default=3, choices=(3, 4))
     parser.add_argument("--trade-rate", type=int, default=3, dest="trade_rate")
     parser.add_argument("--target-level", type=int, default=3, dest="target_level")
+    parser.add_argument("--target-players", type=int, default=1, dest="target_players")
     parser.add_argument("--trials", type=int, default=2000)
     parser.add_argument("--max-turns", type=int, default=300, dest="max_turns")
     parser.add_argument("--typical-samples", type=int, default=50, dest="typical_samples")
@@ -36,6 +37,10 @@ def main() -> None:
         raise SystemExit("--trade-rate must be >= 2")
     if args.target_level < 1:
         raise SystemExit("--target-level must be >= 1")
+    if args.target_players < 1:
+        raise SystemExit("--target-players must be >= 1")
+    if args.target_players > args.players:
+        raise SystemExit("--target-players must be <= --players")
     if args.aqueduct_rounds < 0:
         raise SystemExit("--aqueduct-rounds must be >= 0")
     if args.victory_points_target is not None and args.victory_points_target < 1:
@@ -46,6 +51,7 @@ def main() -> None:
         players=args.players,
         trade_rate=args.trade_rate,
         target_level=args.target_level,
+        target_players=args.target_players,
         max_turns=args.max_turns,
         typical_samples=args.typical_samples,
         starting_hand=args.starting_hand,
