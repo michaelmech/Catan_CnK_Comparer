@@ -31,4 +31,5 @@ Rules currently modeled include:
 - Players must build an initial knight (grain + wool + ore) before doing any development upgrades or unit/building actions.
 - On a 7, only players with more than 7 total cards discard half their hand.
 - By default, 7-discard selection is fully random in both simulation tracks. You can disable this with `--no-random-seven-discards` to restore resource-biased discards.
-- Optional aqueduct follow-up phase: once the development side reaches the target, you can simulate additional rounds (via `--aqueduct --aqueduct-rounds N`) where qualifying development players get a 1-resource aqueduct pick on no-production non-7 rolls, and then all development-side players switch to unit-building for those extra rounds.
+- Optional aqueduct mode: players with science level 3+ get a 1-resource aqueduct pick on no-production non-7 rolls, and can switch to unit-building as configured. Use `--aqueduct`, and optionally `--force-aqueduct-route` to make all development-side players pursue science first.
+- Optional VP stop condition: use `--victory-points-target N` to stop a run once someone reaches `N` VP (cities=2, settlements=1, each development track at level 4+ gives 2 VP).

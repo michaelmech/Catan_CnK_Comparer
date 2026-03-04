@@ -21,8 +21,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-barbarian", dest="barbarian_enabled", action="store_false")
     parser.add_argument("--aqueduct", dest="aqueduct_enabled", action="store_true")
     parser.add_argument("--no-aqueduct", dest="aqueduct_enabled", action="store_false")
+    parser.add_argument("--force-aqueduct-route", dest="force_aqueduct_route", action="store_true")
+    parser.add_argument("--no-force-aqueduct-route", dest="force_aqueduct_route", action="store_false")
     parser.add_argument("--aqueduct-rounds", type=int, default=0, dest="aqueduct_rounds")
-    parser.set_defaults(random_seven_discards=True, barbarian_enabled=False, aqueduct_enabled=False)
+    parser.add_argument("--victory-points-target", type=int, default=None, dest="victory_points_target")
+    parser.set_defaults(random_seven_discards=True, barbarian_enabled=False, aqueduct_enabled=False, force_aqueduct_route=False)
     args, _unknown = parser.parse_known_args()
     return args
 
@@ -35,6 +38,8 @@ def main() -> None:
         raise SystemExit("--target-level must be >= 1")
     if args.aqueduct_rounds < 0:
         raise SystemExit("--aqueduct-rounds must be >= 0")
+    if args.victory_points_target is not None and args.victory_points_target < 1:
+        raise SystemExit("--victory-points-target must be >= 1")
 
     run_experiment(
         trials=args.trials,
@@ -49,4 +54,6 @@ def main() -> None:
         barbarian_enabled=args.barbarian_enabled,
         aqueduct_enabled=args.aqueduct_enabled,
         aqueduct_rounds=args.aqueduct_rounds,
+        force_aqueduct_route=args.force_aqueduct_route,
+        victory_points_target=args.victory_points_target,
     )
