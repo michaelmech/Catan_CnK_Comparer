@@ -31,3 +31,4 @@ Rules currently modeled include:
 - Players must build an initial knight (grain + wool + ore) before doing any development upgrades or unit/building actions.
 - On a 7, only players with more than 7 total cards discard half their hand.
 - By default, 7-discard selection is fully random in both simulation tracks. You can disable this with `--no-random-seven-discards` to restore resource-biased discards.
+- Optional aqueduct follow-up phase: once the development side reaches the target, you can simulate additional rounds (via `--aqueduct --aqueduct-rounds N`) where qualifying development players get a 1-resource aqueduct pick on no-production non-7 rolls, and then all development-side players switch to unit-building for those extra rounds.
