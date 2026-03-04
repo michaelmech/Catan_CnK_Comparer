@@ -6,7 +6,7 @@ from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 from .board import random_site
-from .constants import DICE_BAG, RESOURCES
+from .constants import CITY_COST, DICE_BAG, RESOURCES, SETTLEMENT_PLUS_ROAD_COST
 from .models import PlayerState, TrialResult
 from .strategies import (
     choose_primary_track_by_commodity_expectation,
@@ -53,6 +53,63 @@ def _metrics_from_players(players: List[PlayerState]) -> Dict[str, object]:
     }
 
 
+def _victory_points(player: PlayerState) -> int:
+    board_points = sum(2 if site.is_city else 1 for site in player.sites)
+    dev_points = sum(2 for lvl in player.dev_levels.values() if lvl >= 4)
+    return board_points + dev_points
+
+
+def _pick_aqueduct_resource_for_units(player: PlayerState) -> str:
+    city_gap_by_resource = {c: max(0, n - player.hand.get(c, 0)) for c, n in CITY_COST.items()}
+    settlement_gap_by_resource = {c: max(0, n - player.hand.get(c, 0)) for c, n in SETTLEMENT_PLUS_ROAD_COST.items()}
+
+    city_gap = sum(city_gap_by_resource.values())
+    settlement_gap = sum(settlement_gap_by_resource.values())
+    preferred_cost = SETTLEMENT_PLUS_ROAD_COST if settlement_gap < city_gap else CITY_COST
+    preferred_gaps = settlement_gap_by_resource if settlement_gap < city_gap else city_gap_by_resource
+
+    best_resource = RESOURCES[0]
+    best_score = -10**9
+    for resource in RESOURCES:
+        score = 0
+        if preferred_gaps.get(resource, 0) > 0:
+            score += 2
+        if preferred_cost.get(resource, 0) > 0:
+            score += 1
+        score += preferred_gaps.get(resource, 0)
+
+        if score > best_score:
+            best_score = score
+            best_resource = resource
+
+    return best_resource
+
+
+def _collect_for_turn(
+    players: List[PlayerState],
+    roll: int,
+    aqueduct_enabled: bool,
+) -> None:
+    for player in players:
+        if roll == 7:
+            continue
+
+        before_total = player.resources_gained_total
+        player.collect(roll)
+
+        if not aqueduct_enabled:
+            continue
+        if player.dev_levels.get("science", 0) < 3:
+            continue
+        if player.resources_gained_total != before_total:
+            continue
+
+        chosen = _pick_aqueduct_resource_for_units(player)
+        player.hand[chosen] += 1
+        player.resources_gained_total += 1
+        player.resources_gained_by_type[chosen] += 1
+
+
 def _resolve_barbarian_attack(players: List[PlayerState]) -> None:
     for player in players:
         defended = False
@@ -85,9 +142,14 @@ def simulate_development_until_target(
     dice_seq: List[int],
     random_seven_discards: bool,
     barbarian_enabled: bool,
+    aqueduct_enabled: bool = False,
+    force_aqueduct_route: bool = False,
+    victory_points_target: Optional[int] = None,
 ) -> Tuple[int, bool, List[str], Dict[str, object]]:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
-    primaries = [choose_primary_track_by_commodity_expectation(p) for p in players]
+    primaries = ["science" for _ in players] if force_aqueduct_route else [choose_primary_track_by_commodity_expectation(p) for p in players]
+    building_units = [False for _ in players]
+    reached_target = False
     barbarian_progress = 0
 
     for turn in range(1, max_turns + 1):
@@ -98,8 +160,7 @@ def simulate_development_until_target(
                 if sum(player.hand.values()) > 7:
                     player.cards_lost_to_sevens += discard_half(player.hand, mode=discard_mode, rng=rng)
         else:
-            for player in players:
-                player.collect(roll)
+            _collect_for_turn(players, roll=roll, aqueduct_enabled=aqueduct_enabled)
 
         if barbarian_enabled:
             barbarian_progress += 1
@@ -108,12 +169,23 @@ def simulate_development_until_target(
                 barbarian_progress = 0
 
         active = (turn - 1) % num_players
-        dev_turn_action(players[active], trade_rate, primaries[active], target_level)
+        if building_units[active]:
+            unit_turn_action(players[active], trade_rate=trade_rate, rng=rng, typical_samples=typical_samples)
+        else:
+            dev_goal = 3 if aqueduct_enabled else target_level
+            dev_turn_action(players[active], trade_rate, primaries[active], dev_goal)
+            if aqueduct_enabled and players[active].dev_levels.get("science", 0) >= 3:
+                building_units[active] = True
 
         if any(player.dev_levels[primaries[i]] >= target_level for i, player in enumerate(players)):
+            reached_target = True
+            if not aqueduct_enabled and victory_points_target is None:
+                return turn, True, primaries, _metrics_from_players(players)
+
+        if victory_points_target is not None and any(_victory_points(player) >= victory_points_target for player in players):
             return turn, True, primaries, _metrics_from_players(players)
 
-    return max_turns, False, primaries, _metrics_from_players(players)
+    return max_turns, reached_target if victory_points_target is None else False, primaries, _metrics_from_players(players)
 
 
 def simulate_units_for_turns(
@@ -126,6 +198,8 @@ def simulate_units_for_turns(
     dice_seq: List[int],
     random_seven_discards: bool,
     barbarian_enabled: bool,
+    aqueduct_enabled: bool = False,
+    victory_points_target: Optional[int] = None,
 ) -> TrialResult:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
 
@@ -139,8 +213,7 @@ def simulate_units_for_turns(
                 if sum(player.hand.values()) > 7:
                     player.cards_lost_to_sevens += discard_half(player.hand, mode=discard_mode, rng=rng)
         else:
-            for player in players:
-                player.collect(roll)
+            _collect_for_turn(players, roll=roll, aqueduct_enabled=aqueduct_enabled)
 
         if barbarian_enabled:
             barbarian_progress += 1
@@ -150,6 +223,24 @@ def simulate_units_for_turns(
 
         active = (turn - 1) % num_players
         unit_turn_action(players[active], trade_rate=trade_rate, rng=rng, typical_samples=typical_samples)
+
+        if victory_points_target is not None and any(_victory_points(player) >= victory_points_target for player in players):
+            units_by_player = [p.settlements_built + p.cities_built for p in players]
+            metrics = _metrics_from_players(players)
+            return TrialResult(
+                stop_turn=turn,
+                reached=True,
+                units_total=sum(units_by_player),
+                units_by_player=units_by_player,
+                cities_by_player=[p.cities_built for p in players],
+                settlements_by_player=[p.settlements_built for p in players],
+                roads_by_player=[p.roads_built for p in players],
+                bank_trades_made=metrics["bank_trades_made"],
+                resources_gained_total=metrics["resources_gained_total"],
+                resources_gained_by_type=metrics["resources_gained_by_type"],
+                commodities_gained_from_hexes=metrics["commodities_gained_from_hexes"],
+                cards_lost_to_sevens=metrics["cards_lost_to_sevens"],
+            )
 
     units_by_player = [p.settlements_built + p.cities_built for p in players]
     metrics = _metrics_from_players(players)
@@ -180,6 +271,10 @@ def run_experiment(
     seed: Optional[int] = None,
     random_seven_discards: bool = True,
     barbarian_enabled: bool = False,
+    aqueduct_enabled: bool = False,
+    aqueduct_rounds: int = 0,
+    force_aqueduct_route: bool = False,
+    victory_points_target: Optional[int] = None,
 ) -> None:
     rng = random.Random(seed)
 
@@ -218,6 +313,9 @@ def run_experiment(
             dice_seq=dice_seq,
             random_seven_discards=random_seven_discards,
             barbarian_enabled=barbarian_enabled,
+            aqueduct_enabled=aqueduct_enabled,
+            force_aqueduct_route=force_aqueduct_route,
+            victory_points_target=victory_points_target,
         )
 
         unit_res = simulate_units_for_turns(
@@ -230,6 +328,8 @@ def run_experiment(
             dice_seq=dice_seq,
             random_seven_discards=random_seven_discards,
             barbarian_enabled=barbarian_enabled,
+            aqueduct_enabled=aqueduct_enabled,
+            victory_points_target=victory_points_target,
         )
 
         roll_counts.update(dice_seq[:stop_turn])
@@ -282,6 +382,8 @@ def run_experiment(
     print(f"starting_hand={starting_hand}  typical_samples={typical_samples}  max_turns={max_turns}")
     print(f"random_seven_discards={random_seven_discards}")
     print(f"barbarian_enabled={barbarian_enabled}")
+    print(f"aqueduct_enabled={aqueduct_enabled}  force_aqueduct_route={force_aqueduct_route}  aqueduct_rounds={aqueduct_rounds}")
+    print(f"victory_points_target={victory_points_target}")
     if seed is not None:
         print(f"seed={seed}")
 
