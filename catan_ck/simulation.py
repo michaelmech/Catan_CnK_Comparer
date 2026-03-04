@@ -300,7 +300,7 @@ def run_experiment(
     roll_counts: Counter = Counter()
 
     for _ in range(trials):
-        dice_seq = [rng.choice(DICE_BAG) for _ in range(max_turns)]
+        dice_seq = [rng.choice(DICE_BAG) for _ in range(max_turns + aqueduct_rounds * players)]
 
         stop_turn, reached, _primaries, dev_metrics = simulate_development_until_target(
             rng=rng,
