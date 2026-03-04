@@ -6,7 +6,7 @@ from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 from .board import random_site
-from .constants import DICE_BAG, RESOURCES
+from .constants import CITY_COST, DICE_BAG, RESOURCES, SETTLEMENT_PLUS_ROAD_COST
 from .models import PlayerState, TrialResult
 from .strategies import (
     choose_primary_track_by_commodity_expectation,
@@ -53,6 +53,60 @@ def _metrics_from_players(players: List[PlayerState]) -> Dict[str, object]:
     }
 
 
+def _pick_aqueduct_resource_for_units(player: PlayerState) -> str:
+    city_gap_by_resource = {c: max(0, n - player.hand.get(c, 0)) for c, n in CITY_COST.items()}
+    settlement_gap_by_resource = {c: max(0, n - player.hand.get(c, 0)) for c, n in SETTLEMENT_PLUS_ROAD_COST.items()}
+
+    city_gap = sum(city_gap_by_resource.values())
+    settlement_gap = sum(settlement_gap_by_resource.values())
+    preferred_cost = SETTLEMENT_PLUS_ROAD_COST if settlement_gap < city_gap else CITY_COST
+    preferred_gaps = settlement_gap_by_resource if settlement_gap < city_gap else city_gap_by_resource
+
+    best_resource = RESOURCES[0]
+    best_score = -10**9
+    for resource in RESOURCES:
+        score = 0
+        if preferred_gaps.get(resource, 0) > 0:
+            score += 2
+        if preferred_cost.get(resource, 0) > 0:
+            score += 1
+        score += preferred_gaps.get(resource, 0)
+
+        if score > best_score:
+            best_score = score
+            best_resource = resource
+
+    return best_resource
+
+
+def _collect_for_turn(
+    players: List[PlayerState],
+    roll: int,
+    aqueduct_enabled: bool,
+    aqueduct_owners: Optional[List[bool]] = None,
+) -> None:
+    for i, player in enumerate(players):
+        if roll == 7:
+            continue
+
+        before_total = player.resources_gained_total
+        player.collect(roll)
+
+        if not aqueduct_enabled:
+            continue
+        if aqueduct_owners is not None and not aqueduct_owners[i]:
+            continue
+        if aqueduct_owners is None and player.dev_levels.get("science", 0) < 3:
+            continue
+        if player.resources_gained_total != before_total:
+            continue
+
+        chosen = _pick_aqueduct_resource_for_units(player)
+        player.hand[chosen] += 1
+        player.resources_gained_total += 1
+        player.resources_gained_by_type[chosen] += 1
+
+
 def _resolve_barbarian_attack(players: List[PlayerState]) -> None:
     for player in players:
         defended = False
@@ -85,6 +139,8 @@ def simulate_development_until_target(
     dice_seq: List[int],
     random_seven_discards: bool,
     barbarian_enabled: bool,
+    aqueduct_enabled: bool = False,
+    post_target_rounds: int = 0,
 ) -> Tuple[int, bool, List[str], Dict[str, object]]:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
     primaries = [choose_primary_track_by_commodity_expectation(p) for p in players]
@@ -98,8 +154,7 @@ def simulate_development_until_target(
                 if sum(player.hand.values()) > 7:
                     player.cards_lost_to_sevens += discard_half(player.hand, mode=discard_mode, rng=rng)
         else:
-            for player in players:
-                player.collect(roll)
+            _collect_for_turn(players, roll=roll, aqueduct_enabled=False)
 
         if barbarian_enabled:
             barbarian_progress += 1
@@ -111,6 +166,35 @@ def simulate_development_until_target(
         dev_turn_action(players[active], trade_rate, primaries[active], target_level)
 
         if any(player.dev_levels[primaries[i]] >= target_level for i, player in enumerate(players)):
+            if post_target_rounds > 0:
+                aqueduct_owners = [player.dev_levels[primaries[i]] >= 3 for i, player in enumerate(players)]
+                end_turn = turn + post_target_rounds * num_players
+                for followup_turn in range(turn + 1, end_turn + 1):
+                    followup_roll = dice_seq[followup_turn - 1]
+                    if followup_roll == 7:
+                        discard_mode = "random" if random_seven_discards else "bias_resources"
+                        for player in players:
+                            if sum(player.hand.values()) > 7:
+                                player.cards_lost_to_sevens += discard_half(player.hand, mode=discard_mode, rng=rng)
+                    else:
+                        _collect_for_turn(
+                            players,
+                            roll=followup_roll,
+                            aqueduct_enabled=aqueduct_enabled,
+                            aqueduct_owners=aqueduct_owners,
+                        )
+
+                    if barbarian_enabled:
+                        barbarian_progress += 1
+                        if barbarian_progress >= 7:
+                            _resolve_barbarian_attack(players)
+                            barbarian_progress = 0
+
+                    active = (followup_turn - 1) % num_players
+                    unit_turn_action(players[active], trade_rate=trade_rate, rng=rng, typical_samples=typical_samples)
+
+                return end_turn, True, primaries, _metrics_from_players(players)
+
             return turn, True, primaries, _metrics_from_players(players)
 
     return max_turns, False, primaries, _metrics_from_players(players)
@@ -180,6 +264,8 @@ def run_experiment(
     seed: Optional[int] = None,
     random_seven_discards: bool = True,
     barbarian_enabled: bool = False,
+    aqueduct_enabled: bool = False,
+    aqueduct_rounds: int = 0,
 ) -> None:
     rng = random.Random(seed)
 
@@ -205,7 +291,7 @@ def run_experiment(
     roll_counts: Counter = Counter()
 
     for _ in range(trials):
-        dice_seq = [rng.choice(DICE_BAG) for _ in range(max_turns)]
+        dice_seq = [rng.choice(DICE_BAG) for _ in range(max_turns + aqueduct_rounds * players)]
 
         stop_turn, reached, _primaries, dev_metrics = simulate_development_until_target(
             rng=rng,
@@ -218,6 +304,8 @@ def run_experiment(
             dice_seq=dice_seq,
             random_seven_discards=random_seven_discards,
             barbarian_enabled=barbarian_enabled,
+            aqueduct_enabled=aqueduct_enabled,
+            post_target_rounds=aqueduct_rounds if aqueduct_enabled else 0,
         )
 
         unit_res = simulate_units_for_turns(
@@ -282,6 +370,7 @@ def run_experiment(
     print(f"starting_hand={starting_hand}  typical_samples={typical_samples}  max_turns={max_turns}")
     print(f"random_seven_discards={random_seven_discards}")
     print(f"barbarian_enabled={barbarian_enabled}")
+    print(f"aqueduct_enabled={aqueduct_enabled}  aqueduct_rounds={aqueduct_rounds}")
     if seed is not None:
         print(f"seed={seed}")
 
