@@ -148,9 +148,21 @@ def simulate_development_until_target(
     victory_points_target: Optional[int] = None,
 ) -> Tuple[int, bool, List[str], Dict[str, object]]:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
+    initial_city_has_resource = [
+        {
+            "wood": any(terrain == "forest" for terrain, _ in player.sites[0].hexes),
+            "ore": any(terrain == "mountains" for terrain, _ in player.sites[0].hexes),
+            "sheep": any(terrain == "pasture" for terrain, _ in player.sites[0].hexes),
+        }
+        for player in players
+    ]
     primaries = ["science" for _ in players] if force_aqueduct_route else [choose_primary_track_by_commodity_expectation(p) for p in players]
     building_units = [False for _ in players]
     reached_target = False
+    # Tallies are intentionally non-exclusive: one player may increment multiple
+    # buckets if their initial city includes more than one of forest/mountains/pasture.
+    target_reach_city_resource_tally = {"wood": 0, "ore": 0, "sheep": 0}
+    target_reach_tally_recorded = False
     barbarian_progress = 0
 
     for turn in range(1, max_turns + 1):
@@ -178,18 +190,30 @@ def simulate_development_until_target(
             if aqueduct_enabled and players[active].dev_levels.get("science", 0) >= 3:
                 building_units[active] = True
 
-        n_players_reached_target = sum(
-            1 for i, player in enumerate(players) if player.dev_levels[primaries[i]] >= target_level
-        )
-        if n_players_reached_target >= target_players:
+        players_at_target = [
+            i for i, player in enumerate(players) if player.dev_levels[primaries[i]] >= target_level
+        ]
+        if len(players_at_target) >= target_players:
             reached_target = True
+            if not target_reach_tally_recorded:
+                for player_idx in players_at_target:
+                    for resource in target_reach_city_resource_tally:
+                        if initial_city_has_resource[player_idx][resource]:
+                            target_reach_city_resource_tally[resource] += 1
+                target_reach_tally_recorded = True
             if not aqueduct_enabled and victory_points_target is None:
-                return turn, True, primaries, _metrics_from_players(players)
+                metrics = _metrics_from_players(players)
+                metrics["target_reach_city_resource_tally"] = target_reach_city_resource_tally
+                return turn, True, primaries, metrics
 
         if victory_points_target is not None and any(_victory_points(player) >= victory_points_target for player in players):
-            return turn, True, primaries, _metrics_from_players(players)
+            metrics = _metrics_from_players(players)
+            metrics["target_reach_city_resource_tally"] = target_reach_city_resource_tally
+            return turn, True, primaries, metrics
 
-    return max_turns, reached_target if victory_points_target is None else False, primaries, _metrics_from_players(players)
+    metrics = _metrics_from_players(players)
+    metrics["target_reach_city_resource_tally"] = target_reach_city_resource_tally
+    return max_turns, reached_target if victory_points_target is None else False, primaries, metrics
 
 
 def simulate_units_for_turns(
@@ -302,6 +326,7 @@ def run_experiment(
     unit_roads_built: List[int] = []
     dev_resource_by_type = {r: [] for r in RESOURCES}
     unit_resource_by_type = {r: [] for r in RESOURCES}
+    target_reach_city_resource_tally = {"wood": 0, "ore": 0, "sheep": 0}
     roll_counts: Counter = Counter()
 
     for _ in range(trials):
@@ -363,6 +388,9 @@ def run_experiment(
             dev_resource_by_type[resource].append(dev_metrics["resources_gained_by_type"][resource])
             unit_resource_by_type[resource].append(unit_res.resources_gained_by_type[resource])
 
+        for resource in target_reach_city_resource_tally:
+            target_reach_city_resource_tally[resource] += dev_metrics["target_reach_city_resource_tally"][resource]
+
     reached_rate = sum(1 for x in reached_flags if x) / len(reached_flags)
 
     def _pct(xs: List[int], p: float) -> float:
@@ -419,6 +447,12 @@ def run_experiment(
     by_resource_unit = "  ".join(f"{r}={statistics.mean(unit_resource_by_type[r]):.2f}" for r in RESOURCES)
     print(f"n_resources_by_type_dev: {by_resource_dev}")
     print(f"n_resources_by_type_unit: {by_resource_unit}")
+    print(
+        "n_target_reached_by_players_with_initial_city_on (non-exclusive): "
+        f"wood={target_reach_city_resource_tally['wood']}  "
+        f"ore={target_reach_city_resource_tally['ore']}  "
+        f"sheep={target_reach_city_resource_tally['sheep']}"
+    )
 
     roll_line = "  ".join(f"{n}:{roll_counts.get(n, 0)}" for n in range(2, 13))
     print(f"roll_counts: {roll_line}")
