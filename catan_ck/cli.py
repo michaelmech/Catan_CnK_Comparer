@@ -26,7 +26,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-force-aqueduct-route", dest="force_aqueduct_route", action="store_false")
     parser.add_argument("--aqueduct-rounds", type=int, default=0, dest="aqueduct_rounds")
     parser.add_argument("--victory-points-target", type=int, default=None, dest="victory_points_target")
-    parser.set_defaults(random_seven_discards=True, barbarian_enabled=False, aqueduct_enabled=False, force_aqueduct_route=False)
+    parser.add_argument("--units-force-cities-first", dest="units_force_cities_first", action="store_true")
+    parser.add_argument("--no-units-force-cities-first", dest="units_force_cities_first", action="store_false")
+    parser.set_defaults(
+        random_seven_discards=True,
+        barbarian_enabled=False,
+        aqueduct_enabled=False,
+        force_aqueduct_route=False,
+        units_force_cities_first=False,
+    )
     args, _unknown = parser.parse_known_args()
     return args
 
@@ -62,4 +70,5 @@ def main() -> None:
         aqueduct_rounds=args.aqueduct_rounds,
         force_aqueduct_route=args.force_aqueduct_route,
         victory_points_target=args.victory_points_target,
+        units_force_cities_first=args.units_force_cities_first,
     )

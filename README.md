@@ -34,3 +34,4 @@ Rules currently modeled include:
 - Optional aqueduct mode: players with science level 3+ get a 1-resource aqueduct pick on no-production non-7 rolls, and can switch to unit-building as configured. Use `--aqueduct`, and optionally `--force-aqueduct-route` to make all development-side players pursue science first.
 - Development-side stop condition can require multiple players to hit the target level: use `--target-players N` (default `1`, i.e. first player to reach target).
 - Optional VP stop condition: use `--victory-points-target N` to stop a run once someone reaches `N` VP (cities=2, settlements=1, each development track at level 4+ gives 2 VP).
+- Optional city-priority mode for the unit/building side: use `--units-force-cities-first` to always try city upgrades first, and only build settlement+road when no non-city settlement exists to upgrade.
