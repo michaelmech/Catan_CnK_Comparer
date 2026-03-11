@@ -62,7 +62,13 @@ def dev_turn_action(player: PlayerState, trade_rate: int, primary_track: str, ta
         player.dev_levels[primary_track] = next_level
 
 
-def unit_turn_action(player: PlayerState, trade_rate: int, rng: random.Random, typical_samples: int) -> None:
+def unit_turn_action(
+    player: PlayerState,
+    trade_rate: int,
+    rng: random.Random,
+    typical_samples: int,
+    force_cities_first: bool = False,
+) -> None:
     if not _build_required_knight(player, trade_rate):
         return
 
@@ -70,11 +76,13 @@ def unit_turn_action(player: PlayerState, trade_rate: int, rng: random.Random, t
         built_any = False
 
         settlement_idxs = player.non_city_settlement_indices()
-        city_gap = sum(max(0, n - player.hand.get(c, 0)) for c, n in CITY_COST.items())
-        settlement_gap = sum(max(0, n - player.hand.get(c, 0)) for c, n in SETTLEMENT_PLUS_ROAD_COST.items())
-
-        preferred = "settlement" if settlement_gap < city_gap else "city"
-        build_order = (preferred, "city" if preferred == "settlement" else "settlement")
+        if force_cities_first:
+            build_order = ("city", "settlement") if not settlement_idxs else ("city",)
+        else:
+            city_gap = sum(max(0, n - player.hand.get(c, 0)) for c, n in CITY_COST.items())
+            settlement_gap = sum(max(0, n - player.hand.get(c, 0)) for c, n in SETTLEMENT_PLUS_ROAD_COST.items())
+            preferred = "settlement" if settlement_gap < city_gap else "city"
+            build_order = (preferred, "city" if preferred == "settlement" else "settlement")
 
         for build_kind in build_order:
             if build_kind == "city":

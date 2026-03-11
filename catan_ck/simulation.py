@@ -146,6 +146,7 @@ def simulate_development_until_target(
     aqueduct_enabled: bool = False,
     force_aqueduct_route: bool = False,
     victory_points_target: Optional[int] = None,
+    units_force_cities_first: bool = False,
 ) -> Tuple[int, bool, List[str], Dict[str, object]]:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
     initial_city_has_resource = [
@@ -183,7 +184,13 @@ def simulate_development_until_target(
 
         active = (turn - 1) % num_players
         if building_units[active]:
-            unit_turn_action(players[active], trade_rate=trade_rate, rng=rng, typical_samples=typical_samples)
+            unit_turn_action(
+                players[active],
+                trade_rate=trade_rate,
+                rng=rng,
+                typical_samples=typical_samples,
+                force_cities_first=units_force_cities_first,
+            )
         else:
             dev_goal = 3 if aqueduct_enabled else target_level
             dev_turn_action(players[active], trade_rate, primaries[active], dev_goal)
@@ -228,6 +235,7 @@ def simulate_units_for_turns(
     barbarian_enabled: bool,
     aqueduct_enabled: bool = False,
     victory_points_target: Optional[int] = None,
+    units_force_cities_first: bool = False,
 ) -> TrialResult:
     players = _make_players(rng, num_players, typical_samples, starting_hand)
 
@@ -250,7 +258,13 @@ def simulate_units_for_turns(
                 barbarian_progress = 0
 
         active = (turn - 1) % num_players
-        unit_turn_action(players[active], trade_rate=trade_rate, rng=rng, typical_samples=typical_samples)
+        unit_turn_action(
+            players[active],
+            trade_rate=trade_rate,
+            rng=rng,
+            typical_samples=typical_samples,
+            force_cities_first=units_force_cities_first,
+        )
 
         if victory_points_target is not None and any(_victory_points(player) >= victory_points_target for player in players):
             units_by_player = [p.settlements_built + p.cities_built for p in players]
@@ -304,6 +318,7 @@ def run_experiment(
     aqueduct_rounds: int = 0,
     force_aqueduct_route: bool = False,
     victory_points_target: Optional[int] = None,
+    units_force_cities_first: bool = False,
 ) -> None:
     rng = random.Random(seed)
 
@@ -347,6 +362,7 @@ def run_experiment(
             aqueduct_enabled=aqueduct_enabled,
             force_aqueduct_route=force_aqueduct_route,
             victory_points_target=victory_points_target,
+            units_force_cities_first=units_force_cities_first,
         )
 
         unit_res = simulate_units_for_turns(
@@ -361,6 +377,7 @@ def run_experiment(
             barbarian_enabled=barbarian_enabled,
             aqueduct_enabled=aqueduct_enabled,
             victory_points_target=victory_points_target,
+            units_force_cities_first=units_force_cities_first,
         )
 
         roll_counts.update(dice_seq[:stop_turn])
@@ -421,6 +438,7 @@ def run_experiment(
     print(f"barbarian_enabled={barbarian_enabled}")
     print(f"aqueduct_enabled={aqueduct_enabled}  force_aqueduct_route={force_aqueduct_route}  aqueduct_rounds={aqueduct_rounds}")
     print(f"victory_points_target={victory_points_target}")
+    print(f"units_force_cities_first={units_force_cities_first}")
     if seed is not None:
         print(f"seed={seed}")
 
